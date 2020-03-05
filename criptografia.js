@@ -1,44 +1,129 @@
+const XMLHttpRequest = require('xmlhttprequest').XMLHttpRequest;
 const fs = require('fs');
 const sha1 = require('js-sha1');
 const crypto = require('crypto');
+const request = require('request');
 
-fs.readFile("./resposta.json", 'utf8', function(err, date){
-    if(err){
-        console.log("erro ao ler arquivo")
+const url = 'https://api.codenation.dev/v1/challenge/dev-ps/generate-data?token=5f20d8c4d4c692ad3de98c74e3d068e9d2d18454';
+const http = new XMLHttpRequest();
+
+
+// Faz a requisição na Api
+
+const promise = new Promise((resolve) => {
+  http.open('GET', url, false);
+  http.onreadystatechange = () => {
+    if (http.status == 200) {
+      resolve(http.responseText);
+
+      // fs.writeFile('answer.json', http.responseText , () => {
+      //   console.log('Arquivo Salvo!')
+      // })
     }
-    
-    let jsonResponse = JSON.parse(date);   
-   
-    let fraseDecifrada = cipherdecode(jsonResponse.cifrado, jsonResponse.numero_casas);
-    jsonResponse.decifrado = fraseDecifrada;
-
-    const frase = crypto.createHash('sha1').update(fraseDecifrada).digest('hex');
-    jsonResponse.resumo_criptografico = frase;
-    
-
-    fs.writeFile()
-    
+  }
+  http.send();
 })
 
 
- function cipherdecode(messenger2, move2){ 
-  let cod2="";
-  let codAsc2=[];
-  for(let i=0; i<messenger2.length; i++){
-      codAsc2=messenger2[i].charCodeAt();             
-    if(codAsc2>=65 && codAsc2<=90){
-      cod2+=String.fromCharCode(((codAsc2-65-(move2 %26)+26)%26)+65);
-    }
-    else if(codAsc2>=97 && codAsc2<=122){
-      cod2+=String.fromCharCode(((codAsc2-97-(move2 %26)+26)%26)+97);      
-    }else{
-      cod2+=String.fromCharCode(codAsc2);
-    }
-  }
- return cod2;
+// Cria e atualiza o arquivo answer.json
+
+const createsAndUpdateFile = (string) => {
+  fs.writeFile('answer.json', string, () => {
+    console.log('Arquivo Salvo!');
+  })
 }
 
-module.exports = cipherdecode;
+// Decifra e encripta a frase e atualiza o arquivo answer.json 
+const decryptsAndEncodes = () => {
 
+
+  fs.readFile("./answer.json", "utf8", (err, response) => {
+    if (err) {
+      console.log("erro ao ler arquivo!")
+    };
+
+    let resp = JSON.parse(response);
+
+    resp.decifrado = cipherdecode(resp.cifrado, resp.numero_casas);
+    resp.resumo_criptografico = encrypt(resp.decifrado);
+
+    let newResponse = JSON.stringify(resp);
+
+    createsAndUpdateFile(newResponse);
+  });
+};
+
+
+
+// decifra a mensagem
+const cipherdecode = (messenger, move) => {
+  let cod = "";
+  let codAsc = [];
+  for (let i = 0; i < messenger.length; i++) {
+    codAsc = messenger[i].charCodeAt();
+    if (codAsc >= 65 && codAsc <= 90) {
+      cod += String.fromCharCode(((codAsc - 65 - (move % 26) + 26) % 26) + 65);
+    }
+    else if (codAsc >= 97 && codAsc <= 122) {
+      cod += String.fromCharCode(((codAsc - 97 - (move % 26) + 26) % 26) + 97);
+    } else {
+      cod += String.fromCharCode(codAsc);
+    }
+  }
+  return cod;
+};
+
+//Encripta a mensagem em sha1
+const encrypt = (string) => {
+  let frase_criptografada = crypto.createHash('sha1').update(string).digest('hex');
+
+  return frase_criptografada;
+}
+
+
+// ?Função que deveria enviar a resposta para a api?
+const sendChallenge = async () => {
+
+  // let formData= new FormData('answer.json');
+
+  const url = "https://api.codenation.dev/v1/challenge/dev-ps/submit-solution?token=5f20d8c4d4c692ad3de98c74e3d068e9d2d18454";
+
+  let headers = { 'Content-Type': 'multipart/form-data' };
+  request(
+    {
+      method: 'POST',
+      url: url,
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      },
+      formData: {
+        answer: fs.createReadStream("./answer.json")
+      }
+    },
+    (err, res, body) => {
+      if (err) {
+        console.log('não foi dessa vez');
+      }
+      console.log('success', body);
+    }
+  )
+};
+
+// Se tem sucesso na requisição da api executa a função
+
+promise.then(response => {
+  console.log(response);
+
+  //cria o arquivo answer.json
+  createsAndUpdateFile(response);
+
+  //decifra e codifica a mensagem
+  decryptsAndEncodes();
+
+  //envia o desafio
+
+  sendChallenge();
+
+});
 
 
